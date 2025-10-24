@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Verdienstrechner für Türsteher">
+    <meta name="theme-color" content="#2c3e50">
+    <title>Türsteher Rechner</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💼 Türsteher Rechner</h1>
+            <nav>
+                <button id="nav-calculator" class="nav-btn active">Rechner</button>
+                <button id="nav-history" class="nav-btn">Historie</button>
+                <button id="nav-settings" class="nav-btn">Einstellungen</button>
+            </nav>
+        </header>
+
+        <!-- Calculator Page -->
+        <section id="calculator-page" class="page active">
+            <div class="card">
+                <h2>Arbeitszeit eingeben</h2>
+                <form id="calculator-form">
+                    <div class="form-group">
+                        <label for="start-time">Startzeit:</label>
+                        <input type="time" id="start-time" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end-time">Endzeit:</label>
+                        <input type="time" id="end-time" required>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="overnight">
+                            Über Nacht (Endzeit am nächsten Tag)
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Berechnen</button>
+                </form>
+
+                <div id="result" class="result hidden">
+                    <h3>Ergebnis</h3>
+                    <div class="result-details">
+                        <p><strong>Arbeitszeit:</strong> <span id="result-hours"></span> Stunden</p>
+                        <p><strong>Gesamtverdienst:</strong> <span id="result-total" class="total-amount"></span></p>
+                    </div>
+                    <div id="result-breakdown" class="breakdown"></div>
+                    <button id="save-calculation" class="btn btn-success">In Historie speichern</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- History Page -->
+        <section id="history-page" class="page">
+            <div class="card">
+                <h2>Historie</h2>
+                <div class="history-controls">
+                    <button id="clear-history" class="btn btn-danger">Historie löschen</button>
+                </div>
+                <div id="history-list" class="history-list"></div>
+            </div>
+        </section>
+
+        <!-- Settings Page -->
+        <section id="settings-page" class="page">
+            <div class="card">
+                <h2>Schichten verwalten</h2>
+                <form id="shift-form" class="shift-form">
+                    <div class="form-group">
+                        <label for="shift-start">Von:</label>
+                        <input type="time" id="shift-start" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="shift-end">Bis:</label>
+                        <input type="time" id="shift-end" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="shift-rate">Stundensatz (€):</label>
+                        <input type="number" id="shift-rate" min="0" step="0.5" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Schicht hinzufügen</button>
+                </form>
+
+                <div id="shifts-list" class="shifts-list"></div>
+            </div>
+        </section>
+    </div>
+
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registriert:', reg))
+                    .catch(err => console.log('Service Worker Fehler:', err));
+            });
+        }
+    </script>
+</body>
+</html>
