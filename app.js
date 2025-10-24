@@ -216,15 +216,33 @@ async function loadShifts() {
     sortedShifts.forEach(shift => {
         const div = document.createElement('div');
         div.className = 'shift-item';
-        div.innerHTML = `
-            <div class="shift-info">
-                <div class="shift-time">${shift.startTime} - ${shift.endTime}</div>
-                <div class="shift-rate">€${shift.rate.toFixed(2)}/h</div>
-            </div>
-            <div class="shift-actions">
-                <button class="btn btn-danger btn-small" onclick="deleteShiftHandler(${shift.id})">Löschen</button>
-            </div>
-        `;
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'shift-info';
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'shift-time';
+        timeDiv.textContent = `${shift.startTime} - ${shift.endTime}`;
+        
+        const rateDiv = document.createElement('div');
+        rateDiv.className = 'shift-rate';
+        rateDiv.textContent = `€${shift.rate.toFixed(2)}/h`;
+        
+        infoDiv.appendChild(timeDiv);
+        infoDiv.appendChild(rateDiv);
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'shift-actions';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-danger btn-small';
+        deleteBtn.textContent = 'Löschen';
+        deleteBtn.addEventListener('click', () => deleteShiftHandler(shift.id));
+        
+        actionsDiv.appendChild(deleteBtn);
+        
+        div.appendChild(infoDiv);
+        div.appendChild(actionsDiv);
         list.appendChild(div);
     });
 }

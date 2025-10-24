@@ -16,12 +16,14 @@ self.addEventListener('install', event => {
         caches.open(CACHE_NAME)
             .then(cache => {
                 console.log('Cache geöffnet');
-                return cache.addAll(urlsToCache.map(url => {
-                    // Try to add to cache, but don't fail if some resources don't exist
-                    return cache.add(url).catch(err => {
-                        console.log('Cache add failed for:', url);
-                    });
-                }));
+                // Try to add each URL to cache, but don't fail if some resources don't exist
+                return Promise.all(
+                    urlsToCache.map(url => {
+                        return cache.add(url).catch(err => {
+                            console.log('Cache add failed for:', url);
+                        });
+                    })
+                );
             })
     );
 });
