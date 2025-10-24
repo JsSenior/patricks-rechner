@@ -1,0 +1,6 @@
+node_modules/
+package-lock.json
+generate-icons.js
+icon.svg
+.DS_Store
+*.log
