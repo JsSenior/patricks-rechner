@@ -1,6 +1,6 @@
 // IndexedDB Setup
 const DB_NAME = 'TuersteherRechner';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let db;
 
 // Initialize Database
@@ -27,6 +27,12 @@ async function initDB() {
             if (!db.objectStoreNames.contains('history')) {
                 const historyStore = db.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
                 historyStore.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+
+            // Create holidays store
+            if (!db.objectStoreNames.contains('holidays')) {
+                const holidaysStore = db.createObjectStore('holidays', { keyPath: 'id', autoIncrement: true });
+                holidaysStore.createIndex('date', 'date', { unique: false });
             }
         };
     });
@@ -115,9 +121,45 @@ async function initDefaultShifts() {
     const shifts = await getAllShifts();
     if (shifts.length === 0) {
         // Default shifts as per example in requirements
-        await addShift({ startTime: '02:00', endTime: '04:00', rate: 10 });
-        await addShift({ startTime: '04:00', endTime: '05:00', rate: 20 });
-        await addShift({ startTime: '00:00', endTime: '02:00', rate: 12 });
-        await addShift({ startTime: '05:00', endTime: '06:00', rate: 15 });
+        await addShift({ startTime: '02:00', endTime: '04:00', rate: 10, weekdays: [1,2,3,4,5,6,0] });
+        await addShift({ startTime: '04:00', endTime: '05:00', rate: 20, weekdays: [1,2,3,4,5,6,0] });
+        await addShift({ startTime: '00:00', endTime: '02:00', rate: 12, weekdays: [1,2,3,4,5,6,0] });
+        await addShift({ startTime: '05:00', endTime: '06:00', rate: 15, weekdays: [1,2,3,4,5,6,0] });
     }
+}
+
+// Holiday Operations
+async function addHoliday(holiday) {
+    const transaction = db.transaction(['holidays'], 'readwrite');
+    const store = transaction.objectStore('holidays');
+    return new Promise((resolve, reject) => {
+        const request = store.add(holiday);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function getAllHolidays() {
+    const transaction = db.transaction(['holidays'], 'readonly');
+    const store = transaction.objectStore('holidays');
+    return new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function deleteHoliday(id) {
+    const transaction = db.transaction(['holidays'], 'readwrite');
+    const store = transaction.objectStore('holidays');
+    return new Promise((resolve, reject) => {
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function isHoliday(dateString) {
+    const holidays = await getAllHolidays();
+    return holidays.some(h => h.date === dateString);
 }
