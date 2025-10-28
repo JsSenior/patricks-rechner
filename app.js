@@ -1,6 +1,9 @@
 // App State
 let currentCalculation = null;
 
+// Constants
+const MINUTES_PER_DAY = 24 * 60;
+
 // Initialize App
 document.addEventListener('DOMContentLoaded', async () => {
     await initDB();
@@ -96,7 +99,7 @@ async function calculateEarnings() {
     
     // Handle overnight shifts
     if (overnight && endMinutes <= startMinutes) {
-        endMinutes += 24 * 60; // Add 24 hours
+        endMinutes += MINUTES_PER_DAY; // Add 24 hours
     }
     
     if (!overnight && endMinutes <= startMinutes) {
@@ -118,8 +121,8 @@ async function calculateEarnings() {
     
     while (currentMinute < endMinutes) {
         // Determine which day we're on (handles overnight)
-        const dayOffset = Math.floor(currentMinute / (24 * 60));
-        const minuteOfDay = currentMinute % (24 * 60);
+        const dayOffset = Math.floor(currentMinute / MINUTES_PER_DAY);
+        const minuteOfDay = currentMinute % MINUTES_PER_DAY;
         
         // Get the date for this minute
         const currentDate = new Date(workDateObj);
@@ -151,12 +154,11 @@ async function calculateEarnings() {
                 
                 // Handle shifts that cross midnight
                 if (shiftEnd < shiftStart) {
-                    shiftEnd += 24 * 60;
+                    shiftEnd += MINUTES_PER_DAY;
                 }
                 
                 // Check if current minute falls within this shift
-                if ((minuteOfDay >= shiftStart && minuteOfDay < shiftEnd) || 
-                    (shiftEnd > 24 * 60 && minuteOfDay < (shiftEnd % (24 * 60)))) {
+                if (isMinuteInShift(minuteOfDay, shiftStart, shiftEnd)) {
                     applicableRate = shift.rate;
                     shiftDescription = `${shift.startTime} - ${shift.endTime}`;
                     break;
@@ -172,14 +174,13 @@ async function calculateEarnings() {
         } else {
             // New shift or rate, save previous if any
             if (lastShiftInfo && accumulatedMinutes > 0) {
-                const [desc, rateStr] = lastShiftInfo.split('|');
-                const rate = parseFloat(rateStr);
+                const { description, rate } = parseShiftInfo(lastShiftInfo);
                 const hours = accumulatedMinutes / 60;
                 const earnings = hours * rate;
                 totalEarnings += earnings;
                 
                 breakdown.push({
-                    time: desc,
+                    time: description,
                     hours: hours.toFixed(2),
                     rate: rate,
                     earnings: earnings.toFixed(2)
@@ -196,14 +197,13 @@ async function calculateEarnings() {
     
     // Save last accumulated period
     if (lastShiftInfo && accumulatedMinutes > 0) {
-        const [desc, rateStr] = lastShiftInfo.split('|');
-        const rate = parseFloat(rateStr);
+        const { description, rate } = parseShiftInfo(lastShiftInfo);
         const hours = accumulatedMinutes / 60;
         const earnings = hours * rate;
         totalEarnings += earnings;
         
         breakdown.push({
-            time: desc,
+            time: description,
             hours: hours.toFixed(2),
             rate: rate,
             earnings: earnings.toFixed(2)
@@ -538,8 +538,26 @@ function timeToMinutes(timeString) {
 }
 
 function minutesToTime(minutes) {
-    const mins = minutes % (24 * 60);
+    const mins = minutes % MINUTES_PER_DAY;
     const hours = Math.floor(mins / 60);
     const mins2 = mins % 60;
     return `${String(hours).padStart(2, '0')}:${String(mins2).padStart(2, '0')}`;
+}
+
+function isMinuteInShift(minuteOfDay, shiftStart, shiftEnd) {
+    // Handle shifts that cross midnight
+    if (shiftEnd < shiftStart) {
+        shiftEnd += MINUTES_PER_DAY;
+    }
+    
+    return (minuteOfDay >= shiftStart && minuteOfDay < shiftEnd) || 
+           (shiftEnd > MINUTES_PER_DAY && minuteOfDay < (shiftEnd % MINUTES_PER_DAY));
+}
+
+function parseShiftInfo(shiftInfoString) {
+    const [description, rateStr] = shiftInfoString.split('|');
+    return {
+        description,
+        rate: parseFloat(rateStr)
+    };
 }
