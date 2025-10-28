@@ -11,10 +11,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSettings();
     setupHistory();
     
+    // Set default date to today
+    setDefaultDate();
+    
     // Load initial data
     await loadShifts();
     await loadHistory();
 });
+
+// Set default date to today
+function setDefaultDate() {
+    const dateInput = document.getElementById('work-date');
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+}
 
 // Navigation
 function setupNavigation() {
@@ -57,12 +70,13 @@ function setupCalculator() {
 }
 
 async function calculateEarnings() {
+    const workDate = document.getElementById('work-date').value;
     const startTimeInput = document.getElementById('start-time').value;
     const endTimeInput = document.getElementById('end-time').value;
     const overnight = document.getElementById('overnight').checked;
     
-    if (!startTimeInput || !endTimeInput) {
-        alert('Bitte beide Zeiten eingeben!');
+    if (!workDate || !startTimeInput || !endTimeInput) {
+        alert('Bitte alle Felder ausfüllen!');
         return;
     }
     
@@ -133,11 +147,12 @@ async function calculateEarnings() {
     const totalHours = (endMinutes - startMinutes) / 60;
     
     // Display result
-    displayResult(startTimeInput, endTimeInput, overnight, totalHours, totalEarnings, breakdown);
+    displayResult(workDate, startTimeInput, endTimeInput, overnight, totalHours, totalEarnings, breakdown);
     
     // Store current calculation
     currentCalculation = {
         timestamp: Date.now(),
+        workDate: workDate,
         startTime: startTimeInput,
         endTime: endTimeInput,
         overnight: overnight,
@@ -147,7 +162,7 @@ async function calculateEarnings() {
     };
 }
 
-function displayResult(startTime, endTime, overnight, totalHours, totalEarnings, breakdown) {
+function displayResult(workDate, startTime, endTime, overnight, totalHours, totalEarnings, breakdown) {
     const resultDiv = document.getElementById('result');
     const hoursSpan = document.getElementById('result-hours');
     const totalSpan = document.getElementById('result-total');
@@ -285,14 +300,27 @@ async function loadHistory() {
         const div = document.createElement('div');
         div.className = 'history-item';
         
-        const date = new Date(entry.timestamp);
-        const dateStr = date.toLocaleDateString('de-DE', { 
+        const savedDate = new Date(entry.timestamp);
+        const savedDateStr = savedDate.toLocaleDateString('de-DE', { 
             day: '2-digit', 
             month: '2-digit', 
             year: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
         });
+        
+        // Format work date if available, otherwise use saved timestamp
+        let workDateStr = '';
+        if (entry.workDate) {
+            const [year, month, day] = entry.workDate.split('-');
+            workDateStr = `${day}.${month}.${year}`;
+        } else {
+            workDateStr = savedDate.toLocaleDateString('de-DE', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric'
+            });
+        }
         
         let breakdownHtml = '';
         if (entry.breakdown && entry.breakdown.length > 0) {
@@ -305,12 +333,13 @@ async function loadHistory() {
         
         div.innerHTML = `
             <div class="history-item-header">
-                <span class="history-item-date">${dateStr}</span>
+                <span class="history-item-date">${workDateStr}</span>
                 <span class="history-item-total">€${entry.totalEarnings.toFixed(2)}</span>
             </div>
             <div class="history-item-details">
                 ${entry.startTime} - ${entry.endTime}${entry.overnight ? ' (über Nacht)' : ''} 
                 | ${entry.totalHours.toFixed(2)} Stunden
+                <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">Gespeichert: ${savedDateStr}</div>
                 ${breakdownHtml}
             </div>
         `;
