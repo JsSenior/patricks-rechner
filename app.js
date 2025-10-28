@@ -546,12 +546,13 @@ function minutesToTime(minutes) {
 
 function isMinuteInShift(minuteOfDay, shiftStart, shiftEnd) {
     // Handle shifts that cross midnight
+    let adjustedEnd = shiftEnd;
     if (shiftEnd < shiftStart) {
-        shiftEnd += MINUTES_PER_DAY;
+        adjustedEnd = shiftEnd + MINUTES_PER_DAY;
     }
     
-    return (minuteOfDay >= shiftStart && minuteOfDay < shiftEnd) || 
-           (shiftEnd > MINUTES_PER_DAY && minuteOfDay < (shiftEnd % MINUTES_PER_DAY));
+    return (minuteOfDay >= shiftStart && minuteOfDay < adjustedEnd) || 
+           (adjustedEnd > MINUTES_PER_DAY && minuteOfDay < (adjustedEnd % MINUTES_PER_DAY));
 }
 
 function parseShiftInfo(shiftInfoString) {
