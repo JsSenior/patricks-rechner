@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupCalculator();
     setupSettings();
     setupHistory();
+    setupHolidays();
     
     // Set default date to today
     setDefaultDate();
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load initial data
     await loadShifts();
     await loadHistory();
+    await loadHolidays();
 });
 
 // Set default date to today
@@ -81,6 +83,8 @@ async function calculateEarnings() {
     }
     
     const shifts = await getAllShifts();
+    const holidays = await getAllHolidays();
+    
     if (shifts.length === 0) {
         alert('Bitte fügen Sie zuerst Schichten in den Einstellungen hinzu!');
         return;
@@ -100,48 +104,110 @@ async function calculateEarnings() {
         return;
     }
     
-    // Sort shifts by start time
-    const sortedShifts = shifts.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    // Parse work date
+    const workDateObj = new Date(workDate + 'T00:00:00');
     
-    // Calculate earnings for each overlap
+    // Calculate earnings for each minute with proper weekday and holiday handling
     const breakdown = [];
     let totalEarnings = 0;
     
-    for (const shift of sortedShifts) {
-        const shiftStart = timeToMinutes(shift.startTime);
-        let shiftEnd = timeToMinutes(shift.endTime);
+    // Process each minute of work
+    let currentMinute = startMinutes;
+    let lastShiftInfo = null;
+    let accumulatedMinutes = 0;
+    
+    while (currentMinute < endMinutes) {
+        // Determine which day we're on (handles overnight)
+        const dayOffset = Math.floor(currentMinute / (24 * 60));
+        const minuteOfDay = currentMinute % (24 * 60);
         
-        // Handle shifts that cross midnight
-        if (shiftEnd < shiftStart) {
-            shiftEnd += 24 * 60;
-        }
+        // Get the date for this minute
+        const currentDate = new Date(workDateObj);
+        currentDate.setDate(currentDate.getDate() + dayOffset);
+        const currentDateStr = currentDate.toISOString().split('T')[0];
+        const currentWeekday = currentDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
         
-        // Check for multiple occurrences in 24h+ period
-        const occurrences = [];
-        occurrences.push({ start: shiftStart, end: shiftEnd });
+        // Check if this date is a holiday
+        const holiday = holidays.find(h => h.date === currentDateStr);
+        let applicableRate = null;
+        let shiftDescription = '';
         
-        // If work period is overnight (> 24h), check next day occurrence
-        if (endMinutes > 24 * 60) {
-            occurrences.push({ start: shiftStart + 24 * 60, end: shiftEnd + 24 * 60 });
-        }
-        
-        for (const occurrence of occurrences) {
-            const overlapStart = Math.max(startMinutes, occurrence.start);
-            const overlapEnd = Math.min(endMinutes, occurrence.end);
+        if (holiday) {
+            // Holiday rate takes precedence
+            applicableRate = holiday.rate;
+            shiftDescription = `Feiertag${holiday.name ? ': ' + holiday.name : ''}`;
+        } else {
+            // Find applicable shift for this minute and weekday
+            const sortedShifts = shifts.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
             
-            if (overlapStart < overlapEnd) {
-                const hours = (overlapEnd - overlapStart) / 60;
-                const earnings = hours * shift.rate;
+            for (const shift of sortedShifts) {
+                // Check if shift applies to this weekday
+                if (!shift.weekdays || !shift.weekdays.includes(currentWeekday)) {
+                    continue;
+                }
+                
+                const shiftStart = timeToMinutes(shift.startTime);
+                let shiftEnd = timeToMinutes(shift.endTime);
+                
+                // Handle shifts that cross midnight
+                if (shiftEnd < shiftStart) {
+                    shiftEnd += 24 * 60;
+                }
+                
+                // Check if current minute falls within this shift
+                if ((minuteOfDay >= shiftStart && minuteOfDay < shiftEnd) || 
+                    (shiftEnd > 24 * 60 && minuteOfDay < (shiftEnd % (24 * 60)))) {
+                    applicableRate = shift.rate;
+                    shiftDescription = `${shift.startTime} - ${shift.endTime}`;
+                    break;
+                }
+            }
+        }
+        
+        const currentShiftInfo = shiftDescription + '|' + (applicableRate || 0);
+        
+        if (currentShiftInfo === lastShiftInfo && applicableRate !== null) {
+            // Same shift continues, accumulate
+            accumulatedMinutes++;
+        } else {
+            // New shift or rate, save previous if any
+            if (lastShiftInfo && accumulatedMinutes > 0) {
+                const [desc, rateStr] = lastShiftInfo.split('|');
+                const rate = parseFloat(rateStr);
+                const hours = accumulatedMinutes / 60;
+                const earnings = hours * rate;
                 totalEarnings += earnings;
                 
                 breakdown.push({
-                    time: `${minutesToTime(occurrence.start % (24 * 60))} - ${minutesToTime(occurrence.end % (24 * 60))}`,
+                    time: desc,
                     hours: hours.toFixed(2),
-                    rate: shift.rate,
+                    rate: rate,
                     earnings: earnings.toFixed(2)
                 });
             }
+            
+            // Start new accumulation
+            lastShiftInfo = currentShiftInfo;
+            accumulatedMinutes = applicableRate !== null ? 1 : 0;
         }
+        
+        currentMinute++;
+    }
+    
+    // Save last accumulated period
+    if (lastShiftInfo && accumulatedMinutes > 0) {
+        const [desc, rateStr] = lastShiftInfo.split('|');
+        const rate = parseFloat(rateStr);
+        const hours = accumulatedMinutes / 60;
+        const earnings = hours * rate;
+        totalEarnings += earnings;
+        
+        breakdown.push({
+            time: desc,
+            hours: hours.toFixed(2),
+            rate: rate,
+            earnings: earnings.toFixed(2)
+        });
     }
     
     const totalHours = (endMinutes - startMinutes) / 60;
@@ -197,16 +263,27 @@ function setupSettings() {
         const endTime = document.getElementById('shift-end').value;
         const rate = parseFloat(document.getElementById('shift-rate').value);
         
+        // Get selected weekdays
+        const weekdayCheckboxes = document.querySelectorAll('.weekday-checkbox input[type="checkbox"]:checked');
+        const weekdays = Array.from(weekdayCheckboxes).map(cb => parseInt(cb.value));
+        
         if (!startTime || !endTime || !rate) {
             alert('Bitte alle Felder ausfüllen!');
             return;
         }
         
-        await addShift({ startTime, endTime, rate });
+        if (weekdays.length === 0) {
+            alert('Bitte wählen Sie mindestens einen Wochentag aus!');
+            return;
+        }
+        
+        await addShift({ startTime, endTime, rate, weekdays });
         await loadShifts();
         
         // Reset form
         form.reset();
+        // Re-check all weekdays
+        document.querySelectorAll('.weekday-checkbox input[type="checkbox"]').forEach(cb => cb.checked = true);
     });
 }
 
@@ -227,6 +304,9 @@ async function loadShifts() {
     // Sort shifts by start time
     const sortedShifts = shifts.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
     
+    // Map weekday numbers to German names
+    const weekdayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    
     list.innerHTML = '';
     sortedShifts.forEach(shift => {
         const div = document.createElement('div');
@@ -243,8 +323,28 @@ async function loadShifts() {
         rateDiv.className = 'shift-rate';
         rateDiv.textContent = `€${shift.rate.toFixed(2)}/h`;
         
+        // Display weekdays
+        let weekdaysText = '';
+        if (shift.weekdays && shift.weekdays.length > 0) {
+            if (shift.weekdays.length === 7) {
+                weekdaysText = 'Alle Tage';
+            } else {
+                const sortedWeekdays = [...shift.weekdays].sort((a, b) => a - b);
+                weekdaysText = sortedWeekdays.map(wd => weekdayNames[wd]).join(', ');
+            }
+        } else {
+            weekdaysText = 'Alle Tage';
+        }
+        
+        const weekdaysDiv = document.createElement('div');
+        weekdaysDiv.className = 'shift-weekdays';
+        weekdaysDiv.style.fontSize = '0.85rem';
+        weekdaysDiv.style.color = '#666';
+        weekdaysDiv.textContent = weekdaysText;
+        
         infoDiv.appendChild(timeDiv);
         infoDiv.appendChild(rateDiv);
+        infoDiv.appendChild(weekdaysDiv);
         
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'shift-actions';
@@ -266,6 +366,90 @@ async function deleteShiftHandler(id) {
     if (confirm('Möchten Sie diese Schicht wirklich löschen?')) {
         await deleteShift(id);
         await loadShifts();
+    }
+}
+
+// Holidays
+function setupHolidays() {
+    const form = document.getElementById('holiday-form');
+    
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const date = document.getElementById('holiday-date').value;
+        const name = document.getElementById('holiday-name').value;
+        const rate = parseFloat(document.getElementById('holiday-rate').value);
+        
+        if (!date || !rate) {
+            alert('Bitte Datum und Stundensatz ausfüllen!');
+            return;
+        }
+        
+        await addHoliday({ date, name, rate });
+        await loadHolidays();
+        
+        // Reset form
+        form.reset();
+    });
+}
+
+async function loadHolidays() {
+    const holidays = await getAllHolidays();
+    const list = document.getElementById('holidays-list');
+    
+    if (holidays.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">🎉</div>
+                <p>Keine Feiertage vorhanden. Fügen Sie Ihren ersten Feiertag hinzu!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort holidays by date
+    const sortedHolidays = holidays.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    list.innerHTML = '';
+    sortedHolidays.forEach(holiday => {
+        const div = document.createElement('div');
+        div.className = 'shift-item';
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'shift-info';
+        
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'shift-time';
+        const [year, month, day] = holiday.date.split('-');
+        dateDiv.textContent = `${day}.${month}.${year}${holiday.name ? ' - ' + holiday.name : ''}`;
+        
+        const rateDiv = document.createElement('div');
+        rateDiv.className = 'shift-rate';
+        rateDiv.textContent = `€${holiday.rate.toFixed(2)}/h`;
+        
+        infoDiv.appendChild(dateDiv);
+        infoDiv.appendChild(rateDiv);
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'shift-actions';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-danger btn-small';
+        deleteBtn.textContent = 'Löschen';
+        deleteBtn.addEventListener('click', () => deleteHolidayHandler(holiday.id));
+        
+        actionsDiv.appendChild(deleteBtn);
+        
+        div.appendChild(infoDiv);
+        div.appendChild(actionsDiv);
+        list.appendChild(div);
+    });
+}
+
+async function deleteHolidayHandler(id) {
+    if (confirm('Möchten Sie diesen Feiertag wirklich löschen?')) {
+        await deleteHoliday(id);
+        await loadHolidays();
     }
 }
 

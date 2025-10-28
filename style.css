@@ -299,6 +299,30 @@ nav {
     gap: 0.5rem;
 }
 
+.weekday-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.weekday-checkbox {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--light-bg);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.weekday-checkbox:hover {
+    background-color: #d5dade;
+}
+
+.weekday-checkbox input[type="checkbox"] {
+    margin-right: 0.25rem;
+}
+
 .empty-state {
     text-align: center;
     padding: 3rem 1rem;
